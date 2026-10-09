@@ -1,0 +1,22 @@
+services:
+  ai-spend-hub:
+    build: .
+    restart: unless-stopped
+    ports:
+      # 默认仅 NAS/主机本机可访问；如要内网其他设备访问，在 .env 中设置私网 IP。
+      - "${AI_SPEND_BIND_IP:-127.0.0.1}:8765:8765"
+    environment:
+      AI_SPEND_ACCESS_TOKEN: "${AI_SPEND_ACCESS_TOKEN:?Set_a_strong_token_in_.env}"
+      TZ: "${TZ:-Asia/Shanghai}"
+    volumes:
+      - ai_spend_data:/data
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,noexec,size=16m
+
+volumes:
+  ai_spend_data:

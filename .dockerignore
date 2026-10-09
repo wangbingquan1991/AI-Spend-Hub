@@ -1,0 +1,15 @@
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+data/
+*.sqlite*
+*.db*
+*.log
+__pycache__/
+.pytest_cache/
+tests/
+*.zip
+*.pem
+*.key

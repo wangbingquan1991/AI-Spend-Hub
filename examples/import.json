@@ -1,0 +1,14 @@
+{
+  "transactions": [
+    {
+      "date": "2026-10-09",
+      "provider": "OpenAI API",
+      "type": "api",
+      "amount": 3.5,
+      "currency": "USD",
+      "source": "billing-csv",
+      "externalId": "invoice-20261009-openai-001",
+      "notes": "示例：已入账且实际发生的 API 费用，不是 token 用量统计"
+    }
+  ]
+}

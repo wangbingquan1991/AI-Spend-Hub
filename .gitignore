@@ -1,0 +1,29 @@
+# Secrets and per-machine environment
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Private financial data and backups
+/data/
+*.sqlite
+*.sqlite3
+*.sqlite3-*
+*.db
+*.db-*
+*backup*.json
+*ledger*.csv
+*.log
+
+# Runtime and editor files
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+.venv/
+node_modules/
+.DS_Store
+.idea/
+.vscode/
