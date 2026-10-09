@@ -39,7 +39,7 @@ docker compose up -d --build
 
 数据保存在 Docker 命名卷 `ai_spend_data` 的 `/data/spend.sqlite3`。不要直接删除卷或执行 `docker compose down -v`。如需群晖文件夹挂载，请改 Compose 映射为 `/volume1/docker/ai-spend-hub/data:/data`，并确保容器 UID 10001 对目录有写权限。NAS 需安装 Container Manager / Docker Compose。
 
-备份：网页「导出备份」仅备份主账本 JSON，**不会包含审核候选和事件**。全库请使用 `tools/ledger_snapshot.py` 创建 SQLite 在线快照、校验和恢复到新文件演练，详情见 [`docs/BACKUP_RESTORE.md`](docs/BACKUP_RESTORE.md)。
+备份：网页「导出备份」仅备份主账本 JSON，**不会包含审核候选和事件**。全库请使用 `tools/ledger_snapshot.py` 创建 SQLite 在线快照、校验和恢复到新文件演练，详情见 [`docs/BACKUP_RESTORE.md`](docs/BACKUP_RESTORE.md)。Docker 镜像已包含该工具，可在容器内运行，务必将备份从 Docker 卷复制到受限的安全位置。
 
 原先的手工 SQLite Online Backup 命令仍可参考（没有自动校验和覆盖防护，优先使用上述工具）。如在容器中执行，请确认文件路径位于持久化挂载目录：
 

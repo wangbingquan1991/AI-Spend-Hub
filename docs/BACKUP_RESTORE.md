@@ -19,6 +19,18 @@ python3 tools/ledger_snapshot.py backup \
 - 命令自动做 SQLite `PRAGMA integrity_check`、三表存在性检查和主账本结构检查，并输出修订号及每张表的**记录数量**，不输出账单或邮件内容。
 - 如任何步骤失败，新创建的不完整目标文件会清理；源库不受修改。不要用 `docker compose down -v` 清空生产数据。
 
+### Docker Compose 中运行（仅提供命令，不会自动部署）
+
+Docker 镜像会包含 `/app/tools/ledger_snapshot.py`。容器内 `/data` 是持久化卷，先创建备份子目录：
+
+```bash
+docker compose exec -T ai-spend-hub mkdir -p /data/backups
+docker compose exec -T ai-spend-hub python tools/ledger_snapshot.py backup \
+  --db /data/spend.sqlite3 --out /data/backups/snapshot.sqlite3
+```
+
+**注意**：同一 Docker 卷内的快照只是临时副本，并不构成异地备份。应使用 `docker cp` 或受控 NAS 文件备份将副本转移至已加密、受限的卷外位置，再确认恢复演练成功。不要将数据库作为 PR 附件上传。
+
 ## 2. 校验已有备份
 
 ```bash
