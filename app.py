@@ -23,6 +23,11 @@ CURRENCIES = {'CNY', 'USD', 'JPY', 'EUR', 'HKD'}
 TYPES = {'subscription', 'api', 'topup', 'oneoff', 'refund'}
 CYCLES = {'weekly', 'monthly', 'quarterly', 'yearly'}
 MAX_BODY = 8 * 1024 * 1024
+MAX_REVIEW_CANDIDATES = 10000
+
+
+class DecisionConflictError(ValueError):
+    """The candidate has already received a different final decision."""
 
 
 def date_ok(value):
@@ -154,6 +159,15 @@ def init_db():
         db.execute('CREATE TABLE IF NOT EXISTS ledger (id INTEGER PRIMARY KEY CHECK(id=1), revision INTEGER NOT NULL, state_json TEXT NOT NULL, updated_at TEXT NOT NULL)')
         db.execute('INSERT OR IGNORE INTO ledger(id,revision,state_json,updated_at) VALUES(1,0,?,?)',
                    (json.dumps(default_state(), ensure_ascii=False), dt.datetime.now(dt.timezone.utc).isoformat()))
+        db.execute('''CREATE TABLE IF NOT EXISTS invoice_reviews (
+            source TEXT NOT NULL, external_id TEXT NOT NULL,
+            candidate_json TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending',
+            created_at TEXT NOT NULL, reviewed_at TEXT,
+            PRIMARY KEY(source, external_id))''')
+        db.execute('''CREATE TABLE IF NOT EXISTS review_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, source TEXT NOT NULL,
+            external_id TEXT NOT NULL, event TEXT NOT NULL,
+            recorded_at TEXT NOT NULL)''')
 
 
 def load(db):
@@ -269,8 +283,123 @@ def import_transactions(db, rows):
         raise
 
 
+def review_time():
+    return dt.datetime.now(dt.timezone.utc).isoformat()
+
+
+def propose_invoices(db, candidates):
+    """Store minimal invoice fields, never raw email content or payment credentials."""
+    if not isinstance(candidates, list) or not 1 <= len(candidates) <= 500:
+        raise ValueError('candidates must be a non-empty array (max 500)')
+    db.execute('BEGIN IMMEDIATE')
+    try:
+        _, state = load(db)
+        # Validate entire batch before making any changes.
+        rows = [normalize_import_row(x, state['settings']['rates']) for x in candidates]
+        new, skipped = 0, 0
+        now = review_time()
+        existing_refs = {(t.get('source'), t.get('externalId')) for t in state['transactions'] if t.get('externalId')}
+        for row in rows:
+            key = (row['source'], row['externalId'])
+            existing = db.execute('SELECT candidate_json FROM invoice_reviews WHERE source=? AND external_id=?', key).fetchone()
+            # A repeated upstream ID must never silently replace its contents.
+            proposed = {k: v for k, v in row.items() if k != 'id'}
+            if existing:
+                old = json.loads(existing[0])
+                if old != proposed:
+                    raise DecisionConflictError('same invoice reference has different content')
+                skipped += 1
+                continue
+            if key in existing_refs:
+                skipped += 1
+                continue
+            if db.execute('SELECT COUNT(*) FROM invoice_reviews').fetchone()[0] >= MAX_REVIEW_CANDIDATES:
+                raise ValueError('invoice review storage limit reached')
+            db.execute('''INSERT INTO invoice_reviews(source,external_id,candidate_json,status,created_at)
+                          VALUES(?,?,?,'pending',?)''',
+                       (key[0], key[1], json.dumps(proposed, ensure_ascii=False, allow_nan=False), now))
+            new += 1
+        db.commit()
+        return {'queued': new, 'skipped': skipped}
+    except Exception:
+        db.rollback()
+        raise
+
+
+def list_invoices(db, status='pending', limit=100):
+    if status not in {'pending', 'approved', 'rejected', 'duplicate', 'all'}:
+        raise ValueError('status must be pending, approved, rejected, duplicate or all')
+    if not isinstance(limit, int) or limit < 1 or limit > 500:
+        raise ValueError('limit must be 1..500')
+    if status == 'all':
+        rows = db.execute('''SELECT source,external_id,candidate_json,status,created_at,reviewed_at
+                             FROM invoice_reviews ORDER BY created_at DESC,source,external_id LIMIT ?''', (limit,)).fetchall()
+    else:
+        rows = db.execute('''SELECT source,external_id,candidate_json,status,created_at,reviewed_at
+                             FROM invoice_reviews WHERE status=? ORDER BY created_at DESC,source,external_id LIMIT ?''',
+                          (status, limit)).fetchall()
+    return {'candidates': [{**json.loads(row[2]), 'status': row[3], 'createdAt': row[4],
+                            'reviewedAt': row[5]} for row in rows],
+            'count': len(rows)}
+
+
+def decide_invoice(db, data):
+    data = ensure_dict(data)
+    source, external_id = clean_text(data.get('source'), 80), clean_text(data.get('externalId'), 200)
+    decision = data.get('decision')
+    if not source or not external_id or decision not in {'approve', 'reject'}:
+        raise ValueError('source, externalId and decision (approve or reject) required')
+    db.execute('BEGIN IMMEDIATE')
+    try:
+        row = db.execute('SELECT candidate_json,status FROM invoice_reviews WHERE source=? AND external_id=?',
+                         (source, external_id)).fetchone()
+        if not row:
+            db.rollback()
+            return None
+        payload, status = json.loads(row[0]), row[1]
+        final = 'approved' if decision == 'approve' else 'rejected'
+        if status != 'pending':
+            if status == final or (status == 'duplicate' and decision == 'approve'):
+                db.rollback()
+                return {'status': status, 'alreadyReviewed': True}
+            raise DecisionConflictError('invoice already reviewed; cannot reverse decision')
+        if decision == 'reject':
+            final = 'rejected'
+            revision = None
+        else:
+            revision, state = load(db)
+            key = (source, external_id)
+            duplicates = {(t.get('source'), t.get('externalId')) for t in state['transactions'] if t.get('externalId')}
+            if key in duplicates:
+                final = 'duplicate'
+            else:
+                if len(state['transactions']) >= 30000:
+                    raise ValueError('ledger transaction limit reached')
+                state['transactions'].append({'id': str(uuid.uuid4()), **payload})
+                commit_state(db, revision, state)
+                revision += 1
+        now = review_time()
+        db.execute('UPDATE invoice_reviews SET status=?,reviewed_at=? WHERE source=? AND external_id=?',
+                   (final, now, source, external_id))
+        db.execute('INSERT INTO review_events(source,external_id,event,recorded_at) VALUES(?,?,?,?)',
+                   (source, external_id, final, now))
+        db.commit()
+        return {'status': final, 'alreadyReviewed': False, 'revision': revision}
+    except Exception:
+        db.rollback()
+        raise
+
+
+def list_review_events(db, limit=100):
+    if not 1 <= limit <= 500:
+        raise ValueError('limit must be 1..500')
+    rows = db.execute('''SELECT source,external_id,event,recorded_at
+                         FROM review_events ORDER BY id DESC LIMIT ?''', (limit,)).fetchall()
+    return {'events': [{'source': r[0], 'externalId': r[1], 'event': r[2], 'recordedAt': r[3]} for r in rows]}
+
+
 class Handler(BaseHTTPRequestHandler):
-    server_version = 'AISpendHub/0.2'
+    server_version = 'AISpendHub/0.3-dev'
 
     def log_message(self, fmt, *args):
         # Avoid accidentally logging authorization material or full URLs with tokens.
@@ -308,8 +437,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path = urlparse(self.path).path
-        if path in {'/', '/index.html'}:
-            content = (ROOT / 'web/index.html').read_bytes()
+        if path in {'/', '/index.html', '/review'}:
+            content = (ROOT / ('web/review.html' if path == '/review' else 'web/index.html')).read_bytes()
             self.send_response(200)
             self.send_header('Content-Type', 'text/html; charset=utf-8')
             self.send_header('Content-Length', str(len(content)))
@@ -334,6 +463,18 @@ class Handler(BaseHTTPRequestHandler):
                 with connect_db() as db:
                     _, state = load(db)
                 self.respond(200, summary(state, params.get('month', [None])[0]))
+            except ValueError as e:
+                self.respond(400, {'error': str(e)})
+        elif path in {'/api/invoices', '/api/invoices/events'}:
+            if not self.require_auth():
+                return
+            try:
+                params = parse_qs(urlparse(self.path).query)
+                limit = int(params.get('limit', ['100'])[0])
+                with connect_db() as db:
+                    output = (list_review_events(db, limit) if path.endswith('/events')
+                              else list_invoices(db, params.get('status', ['pending'])[0], limit))
+                self.respond(200, output)
             except ValueError as e:
                 self.respond(400, {'error': str(e)})
         else:
@@ -363,15 +504,23 @@ class Handler(BaseHTTPRequestHandler):
             self.respond(400, {'error': str(e)})
 
     def do_POST(self):
-        if urlparse(self.path).path != '/api/transactions/import':
+        path = urlparse(self.path).path
+        if path not in {'/api/transactions/import', '/api/invoices/propose', '/api/invoices/decision'}:
             return self.respond(404, {'error': 'not found'})
         if not self.require_auth():
             return
         try:
             a = ensure_dict(self.read_json())
             with connect_db() as db:
-                result = import_transactions(db, a.get('transactions'))
-            self.respond(200, result)
+                if path == '/api/transactions/import':
+                    result = import_transactions(db, a.get('transactions'))
+                elif path == '/api/invoices/propose':
+                    result = propose_invoices(db, a.get('candidates'))
+                else:
+                    result = decide_invoice(db, a)
+            self.respond(404 if result is None else 200, {'error': 'invoice not found'} if result is None else result)
+        except DecisionConflictError as e:
+            self.respond(409, {'error': str(e)})
         except (ValueError, TypeError, UnicodeDecodeError, json.JSONDecodeError) as e:
             self.respond(400, {'error': str(e)})
 
