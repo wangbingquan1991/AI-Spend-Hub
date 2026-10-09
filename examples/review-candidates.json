@@ -1,0 +1,14 @@
+{
+  "candidates": [
+    {
+      "date": "2026-10-09",
+      "provider": "Example AI Service",
+      "type": "subscription",
+      "amount": 20,
+      "currency": "USD",
+      "source": "manual-review",
+      "externalId": "example-invoice-001",
+      "notes": "Demo only; no real charge or linked account"
+    }
+  ]
+}

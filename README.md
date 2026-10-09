@@ -1,4 +1,4 @@
-# AI Spend Hub v0.2 · AI 消费总账
+# AI Spend Hub v0.3-dev · AI 消费总账
 
 适合个人 / 家庭内网使用的 AI 账单管理服务，兼容 v0.1 HTML JSON 备份。**0 运行依赖**：Python 标准库 + SQLite，附 Docker Compose。默认无外部网络请求。
 
@@ -19,13 +19,14 @@ Git 开发与敏感信息保护规则见 [`docs/GIT_WORKFLOW.md`](docs/GIT_WORKF
 - 原币记录 + 手动设置币种汇率；每笔历史汇率固化以防汇率变化导致历史账单漂移。汇率仅估算，非结算凭证。
 - 支出趋势、分类、预算、订阅编辑与流水编辑、CSV/JSON 导入导出。
 - SQLite 持久化、乐观并发修订号（避免静默覆盖）；授权 API 批量导入带 `source + externalId` 去重，适合 n8n / OpenClaw 发送已核实账单。
+- v0.3-dev 新增独立候选账单审核队列（审批、拒绝、事件记录、重复单号冲突保护），通过 `/review` 在浏览器审核后才真正入账。见 [`docs/REVIEW_API.md`](docs/REVIEW_API.md)。
 - **不包含**：直接读取 Google/Gmail、银行卡、支付宝、微信、第三方 AI 供应商数据；不连接这些账号就无法自动发现它们的费用。
 
 ## 快速启动 · 群晖 DSM / NAS
 
 ```bash
-unzip ai-spend-hub-v0.2.zip
-cd ai-spend-hub-v0.2
+git clone https://github.com/wangbingquan1991/AI-Spend-Hub.git
+cd AI-Spend-Hub
 cp .env.example .env
 python3 -c 'import secrets; print(secrets.token_urlsafe(36))'
 # 把输出粘贴进 .env 的 AI_SPEND_ACCESS_TOKEN=...，不要使用示例值。
@@ -87,11 +88,21 @@ curl -sS http://127.0.0.1:8765/api/transactions/import \
 
 n8n：用邮件触发或 CSV 解析节点把 **核验过的账单** 转成上述 JSON；HTTP Request 节点调用 NAS 的 `POST /api/transactions/import`，设置 Bearer 身份认证（建议通过 n8n 凭据管理，不写死在工作流 JSON），Content-Type application/json。n8n 容器与服务需网络可达；如果走独立 Compose 网络，使用 NAS 内网地址或加入同一 Docker 自定义网络。详情见 `examples/n8n-integration.md`。
 
-## 未来阶段建议
+## 后续里程碑
 
-- v0.3：经用户明确授权的 Gmail 账单检索/解析、发票审核队列、预付/积分对应关系、真正的到账对账。
-- v0.4：按供应商官方 API 或下载账单对账、异常提醒、真实历史汇率、账单源统一 dedupe 策略。
-- v0.5：用户管理、审计日志、细粒度权限、完全生产级 TLS 接入。
+详见 [`docs/ROADMAP.md`](docs/ROADMAP.md)。当前 v0.3a 为审核队列，可由 n8n 发送结构化候选账单，尚未连接 Gmail 或其他供应商。将来 Gmail/EML/CSV 收据解析（v0.3b）需要用户主动授权。
+
+## v0.3 候选账单审核（NAS 模式）
+
+- `POST /api/invoices/propose`：接收结构化候选；同源票据去重，冲突返回 409，数据不会直接计入支出。
+- `GET /api/invoices?status=pending`：查询待审核候选。
+- `POST /api/invoices/decision`：人工批准或拒绝；批准才生成真实交易，审批事件可查询。
+- `GET /api/invoices/events`：审核事件历史。
+- `GET /review`：人工审核网页（仅 NAS 服务端模式）。
+
+示例候选：[`examples/review-candidates.json`](examples/review-candidates.json)。API 细节：[`docs/REVIEW_API.md`](docs/REVIEW_API.md)。
+
+**重要备份区别**：网页 JSON 导出目前只备份主账本，不含独立 SQLite 审核表；需要完整保留待审核队列和事件历史时，必须用上文的 SQLite Online Backup 备份整个数据库。
 
 ## 测试
 
