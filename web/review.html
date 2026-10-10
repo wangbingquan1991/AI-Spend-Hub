@@ -1,60 +1,75 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>AI Spend Hub · 账单审核</title>
 <style>
-:root{font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;color:#21354d;background:#f5f8fc}*{box-sizing:border-box}body{margin:0}.shell{max-width:1080px;margin:auto;padding:28px 18px 80px}a{color:#2767cc}h1{font-size:28px;margin:22px 0 8px}p{color:#60748b;line-height:1.6}.panel{border:1px solid #dce6f1;border-radius:16px;background:white;padding:22px;margin-top:16px}.row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}.grow{flex:1}button,input,select,textarea{font:inherit}button{border:1px solid #cad8e8;border-radius:9px;background:white;padding:8px 12px;cursor:pointer;color:#233a52}button.primary{background:#246df1;color:white;border-color:#246df1}button.danger{color:#a42d4e}button:disabled{opacity:.5;cursor:wait}input,select,textarea{border:1px solid #cad8e8;padding:9px;border-radius:8px}input{min-width:220px;flex:1}textarea{width:100%;min-height:125px;resize:vertical;font-family:ui-monospace,monospace;font-size:13px}table{width:100%;border-collapse:collapse;min-width:760px;font-size:13px}th,td{text-align:left;padding:12px 8px;border-bottom:1px solid #e7edf5}th{color:#60748b}td{overflow-wrap:anywhere}.scroll{overflow:auto}.message{min-height:24px;color:#9c3b4b}.status{font-weight:700;color:#246df1}.muted{font-size:12px;color:#60748b}.notice{padding:10px 14px;background:#f1f6ff;border-radius:9px;color:#344f74}
-</style></head><body><div class="shell">
-<nav><a href="/">← 返回消费总账</a></nav><h1>账单审核中心</h1>
+:root{font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;color:#21354d;background:#f5f8fc}
+*{box-sizing:border-box}body{margin:0}.shell{max-width:1080px;margin:auto;padding:28px 18px 80px}
+a{color:#2767cc}h1{font-size:28px;margin:22px 0 8px}p{color:#60748b;line-height:1.6}.panel{border:1px solid #dce6f1;border-radius:16px;background:white;padding:22px;margin-top:16px}
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}.grow{flex:1}button,input,select,textarea{font:inherit}button{border:1px solid #cad8e8;border-radius:9px;background:white;padding:8px 12px;cursor:pointer;color:#233a52}button.primary{background:#246df1;color:white;border-color:#246df1}button.danger{color:#a42d4e}button:disabled{opacity:.5;cursor:wait}input,select,textarea{border:1px solid #cad8e8;padding:9px;border-radius:8px}input{min-width:220px;flex:1}textarea{width:100%;min-height:125px;resize:vertical;font-family:ui-monospace,monospace;font-size:13px}
+table{width:100%;border-collapse:collapse;min-width:760px;font-size:13px}th,td{text-align:left;padding:12px 8px;border-bottom:1px solid #e7edf5}th{color:#60748b}td{overflow-wrap:anywhere}.scroll{overflow:auto}small{color:#60748b}.message{min-height:24px;color:#9c3b4b}.status{font-weight:700;color:#246df1}.muted{font-size:12px;color:#60748b}.actions{display:flex;gap:8px}.notice{padding:10px 14px;background:#f1f6ff;border-radius:9px;color:#344f74}
+</style>
+</head>
+<body><div class="shell">
+<nav><a href="/">← 返回消费总账</a></nav>
+<h1>账单审核中心</h1>
 <p>候选账单不会自动计入支出。请核实付款日期、平台、金额和币种，再点击「确认入账」；拒绝后不会改变消费统计。</p>
-<section class="panel"><div class="row"><strong>NAS 账本连接</strong><span class="status" id="connection">未验证</span><span class="grow"></span><button id="reload">刷新账单</button></div><div class="row" style="margin-top:12px"><label for="token">访问令牌</label><input id="token" type="password" autocomplete="off" placeholder="与主页面共用会话令牌"><button class="primary" id="connect">连接</button></div><p id="message" class="message" role="status" aria-live="polite"></p></section>
-<section class="panel"><div class="row"><strong>审核队列</strong><span class="grow"></span><label for="filter">状态</label><select id="filter"><option value="pending">待审核</option><option value="approved">已批准</option><option value="rejected">已拒绝</option><option value="duplicate">已存在</option><option value="all">所有</option></select></div><div class="scroll"><table><thead><tr><th>日期 / 平台</th><th>类型</th><th>金额</th><th>来源 / 编号</th><th>状态</th><th>操作</th></tr></thead><tbody id="items"><tr><td colspan="6">连接 NAS 后显示账单</td></tr></tbody></table></div></section>
-<section class="panel"><h2>提交候选账单（手动测试）</h2><p class="muted">仅录入结构化 JSON；不要粘贴完整邮件、卡号、Cookie 或密钥。后续可由获得授权的 n8n / 邮件解析器调用相同 API。</p><textarea id="input" spellcheck="false" aria-label="候选账单 JSON">{"candidates":[{"date":"2026-10-09","provider":"示例 AI 服务","type":"subscription","amount":20,"currency":"USD","source":"manual-review","externalId":"sample-20261009-001"}]}</textarea><div class="row" style="margin-top:12px"><button id="submit">加入审核队列</button><span class="muted">不会自动提交示例。</span></div></section>
-<p class="notice">🔒 不保存原始邮件内容。跨设备访问请使用 HTTPS 或可信 VPN，不要将 NAS HTTP 服务暴露到公网。</p></div>
+<section class="panel"><div class="row"><strong>NAS 账本连接</strong><span class="status" id="connection">未验证</span><span class="grow"></span><button id="reload">刷新账单</button></div>
+<div class="row" style="margin-top:12px"><label for="token">访问令牌</label><input id="token" type="password" autocomplete="off" placeholder="与主页面共用会话令牌"><button class="primary" id="connect">连接</button></div>
+<p id="message" class="message" role="status" aria-live="polite"></p></section>
+<section class="panel"><div class="row"><strong>审核队列</strong><span class="grow"></span><label for="filter">状态</label><select id="filter"><option value="pending">待审核</option><option value="approved">已批准</option><option value="rejected">已拒绝</option><option value="duplicate">已存在</option><option value="all">所有</option></select></div>
+<div class="scroll"><table><thead><tr><th>日期 / 平台</th><th>交易类型</th><th>金额</th><th>来源 / 编号</th><th>状态</th><th>操作</th></tr></thead><tbody id="items"><tr><td colspan="6">连接 NAS 后显示账单</td></tr></tbody></table></div></section>
+<section class="panel"><h2>提交候选账单（开发与手动导入）</h2>
+<p class="muted">提供结构化 JSON，不要粘贴整封邮件、银行卡号或 API 密钥。未来由经过授权的邮件解析器或 n8n 向同一个接口提交。相同来源和账单编号重复提交将自动跳过。</p>
+<textarea id="input" spellcheck="false" aria-label="账单 JSON">{"candidates":[{"date":"2026-10-09","provider":"示例 AI 服务","type":"subscription","amount":20,"currency":"USD","source":"manual-review","externalId":"sample-20261009-001"}]}</textarea>
+<div class="row" style="margin-top:12px"><button id="submit">加入审核队列</button><span class="muted">仅演示格式；需人工提交，不会自动创建示例账单。</span></div></section>
+<p class="notice">🔒 本页面只存储经过提取的账单必要字段（不保留原始邮件内容）。通过未加密的 HTTP 连接跨设备输入令牌有风险，请仅在可信内网或 HTTPS 下使用。</p>
+</div>
 <script>
 (()=>{'use strict';
-const KEY='ai_spend_hub_nas_access_token', el=id=>document.getElementById(id);
+const KEY='ai_spend_hub_nas_access_token';
+const $=id=>document.getElementById(id);
 let token='';try{token=sessionStorage.getItem(KEY)||''}catch(e){}
-el('token').value=token;
-const message=s=>el('message').textContent=s;
+$('token').value=token;
+const msg=s=>$('message').textContent=s;
 const labels={pending:'待审核',approved:'已批准',rejected:'已拒绝',duplicate:'账本已有'};
-async function api(path,method='GET',data){
- const response=await fetch(path,{method,headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:data===undefined?undefined:JSON.stringify(data),cache:'no-store'});
- let result;try{result=await response.json()}catch(e){throw Error('服务器未返回 JSON')}
- if(!response.ok)throw Error(result.error||'请求失败 '+response.status);
- return result;
+async function call(path,method='GET',data){
+ const res=await fetch(path,{method,headers:{'Authorization':'Bearer '+token,'Content-Type':'application/json'},body:data===undefined?undefined:JSON.stringify(data),cache:'no-store'});
+ let out;try{out=await res.json()}catch(e){throw Error('服务端没有返回合法 JSON')}
+ if(!res.ok)throw Error(out.error||'请求失败：'+res.status);
+ return out;
 }
-function td(row,value){const col=document.createElement('td');col.textContent=String(value??'');row.append(col);return col}
-async function reload(){
- try{const result=await api('/api/invoices?status='+encodeURIComponent(el('filter').value));el('connection').textContent='NAS 已连接';
- try{sessionStorage.setItem(KEY,token)}catch(e){}
- const body=el('items');body.replaceChildren();
- for(const item of result.candidates){
-  const tr=document.createElement('tr');
-  td(tr,item.date+' / '+item.provider);td(tr,item.type);td(tr,String(item.amount)+' '+item.currency);
-  td(tr,item.source+' / '+item.externalId);td(tr,labels[item.status]||item.status);
-  const c=document.createElement('td');tr.append(c);
-  if(item.status==='pending')for(const opt of [['approve','确认入账','primary'],['reject','拒绝','danger']]){
-    const btn=document.createElement('button');btn.className=opt[2];btn.textContent=opt[1];btn.onclick=async()=>{
-      if(!confirm(opt[1]+'？ '+item.provider+' · '+item.amount+' '+item.currency+' ('+item.externalId+')'))return;
-      btn.disabled=true;
-      try{const r=await api('/api/invoices/decision','POST',{source:item.source,externalId:item.externalId,decision:opt[0]});await reload();message('审核完成：'+(labels[r.status]||r.status))}
-      catch(e){message(e.message);btn.disabled=false}
-    };c.append(btn)
-  }
-  body.append(tr)
+function cell(tr,s){const td=document.createElement('td');td.textContent=String(s??'');tr.append(td);return td}
+async function load(){
+ try{const out=await call('/api/invoices?status='+encodeURIComponent($('filter').value));$('connection').textContent='NAS 已连接';
+ const body=$('items');body.replaceChildren();
+ for(const item of out.candidates){const tr=document.createElement('tr');cell(tr,item.date+' / '+item.provider);cell(tr,item.type);
+ cell(tr,`${item.amount} ${item.currency}`);cell(tr,item.source+' / '+item.externalId);const statusCell=cell(tr,labels[item.status]||item.status);
+ if(item.possibleDuplicates?.length){
+   const note=document.createElement('div');note.className='muted';
+   note.textContent='⚠ 疑似跨来源重复：'+item.possibleDuplicates.map(x=>x.source+'/'+x.externalId+'（'+(x.kind==='ledger'?'已入账':'候选')+'）').join('；');
+   statusCell.append(note);
  }
- if(!result.candidates.length){const tr=document.createElement('tr');td(tr,'当前没有匹配的账单').colSpan=6;body.append(tr)}
- message('已载入 '+result.count+' 条记录')
- }catch(e){el('connection').textContent='连接失败';message(e.message)}
+ const td=document.createElement('td');tr.append(td);
+ if(item.status==='pending')for(const [decision,label,cls] of [['approve','确认入账','primary'],['reject','拒绝','danger']]){
+ const btn=document.createElement('button');btn.className=cls;btn.textContent=label;btn.onclick=async()=>{
+ const warnings=(item.possibleDuplicates||[]).map(x=>x.source+'/'+x.externalId).join('、');
+ const warningText=warnings?'\n⚠ 疑似重复：'+warnings+'\n请人工确认是否另一笔独立付款；系统不会自动判断。':'';
+ if(!confirm(`${label}？\n${item.provider} · ${item.amount} ${item.currency}\n来源：${item.source}/${item.externalId}${warningText}`))return;
+ btn.disabled=true;try{const result=await call('/api/invoices/decision','POST',{source:item.source,externalId:item.externalId,decision});msg('审核完成：'+(labels[result.status]||result.status));await load()}catch(e){msg(e.message);btn.disabled=false}
+ };td.append(btn)
+ }
+ body.append(tr)}if(!out.candidates.length){const tr=document.createElement('tr');const td=cell(tr,'当前没有匹配的账单');td.colSpan=6;body.append(tr)}
+ msg(`已载入 ${out.count} 条记录`)}catch(e){$('connection').textContent='连接失败';msg(e.message)}
 }
-el('connect').onclick=()=>{token=el('token').value.trim();reload()};
-el('reload').onclick=reload;el('filter').onchange=reload;
-el('submit').onclick=async()=>{
- try{if(!token)throw Error('请先连接 NAS');const result=await api('/api/invoices/propose','POST',JSON.parse(el('input').value));await reload();message('已加入 '+result.queued+' 条，跳过 '+result.skipped+' 条')}
- catch(e){message(e.message)}
+$('connect').onclick=()=>{token=$('token').value.trim();try{sessionStorage.setItem(KEY,token)}catch(e){}load()};
+$('reload').onclick=load;$('filter').onchange=load;
+$('submit').onclick=async()=>{
+ try{if(!token)throw Error('请先连接 NAS');const payload=JSON.parse($('input').value);const result=await call('/api/invoices/propose','POST',payload);msg(`已加入 ${result.queued} 条，跳过 ${result.skipped} 条`);await load()}
+ catch(e){msg(e.message)}
 };
-if(token)reload();
+if(token)load();
 })();
 </script></body></html>

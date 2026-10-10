@@ -326,6 +326,55 @@ def propose_invoices(db, candidates):
         raise
 
 
+def _invoice_match_key(row):
+    """Conservative exact-money fingerprint; no exchange-rate or fuzzy date guesses."""
+    return (" ".join(row['provider'].split()).casefold(), row['date'],
+            row['type'], row['currency'], row['amount'])
+
+
+def possible_duplicate_hints(db, candidates):
+    """Read-only hints across sources; never alters approval, status or cash ledger.
+
+    An approved candidate is also represented in the ledger. Deduplicate by
+    source/externalId and prefer the already paid ledger record in that case.
+    Rejected/duplicate review rows are not evidence of another payment.
+    """
+    if not candidates:
+        return []
+    _, state = load(db)
+    from collections import defaultdict
+    index = defaultdict(dict)
+    for source, external_id, candidate_json, status in db.execute(
+        "SELECT source,external_id,candidate_json,status FROM invoice_reviews "
+        "WHERE status IN ('pending','approved')"
+    ):
+        candidate = json.loads(candidate_json)
+        key = _invoice_match_key(candidate)
+        index[key][(source, external_id)] = {
+            'source': source, 'externalId': external_id,
+            'kind': 'candidate', 'status': status,
+        }
+    for row in state['transactions']:
+        source, external_id = row.get('source'), row.get('externalId')
+        # Only source-backed payments have an actionable cross-source reference.
+        if source and external_id:
+            index[_invoice_match_key(row)][(source, external_id)] = {
+                'source': source, 'externalId': external_id,
+                'kind': 'ledger', 'status': 'paid',
+            }
+    results = []
+    for candidate in candidates:
+        if candidate['status'] != 'pending':
+            results.append([])
+            continue
+        own_source = candidate['source']
+        hints = [item for (source, _), item in index[_invoice_match_key(candidate)].items()
+                 if source != own_source]
+        hints.sort(key=lambda x: (x['source'], x['externalId']))
+        results.append(hints[:5])
+    return results
+
+
 def list_invoices(db, status='pending', limit=100):
     if status not in {'pending', 'approved', 'rejected', 'duplicate', 'all'}:
         raise ValueError('status must be pending, approved, rejected, duplicate or all')
@@ -338,9 +387,11 @@ def list_invoices(db, status='pending', limit=100):
         rows = db.execute('''SELECT source,external_id,candidate_json,status,created_at,reviewed_at
                              FROM invoice_reviews WHERE status=? ORDER BY created_at DESC,source,external_id LIMIT ?''',
                           (status, limit)).fetchall()
-    return {'candidates': [{**json.loads(row[2]), 'status': row[3], 'createdAt': row[4],
-                            'reviewedAt': row[5]} for row in rows],
-            'count': len(rows)}
+    candidates = [{**json.loads(row[2]), 'status': row[3], 'createdAt': row[4],
+                   'reviewedAt': row[5]} for row in rows]
+    for candidate, hints in zip(candidates, possible_duplicate_hints(db, candidates)):
+        candidate['possibleDuplicates'] = hints
+    return {'candidates': candidates, 'count': len(candidates)}
 
 
 def decide_invoice(db, data):
