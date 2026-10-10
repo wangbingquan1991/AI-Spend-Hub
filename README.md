@@ -108,6 +108,18 @@ n8n：用邮件触发或 CSV 解析节点把 **核验过的账单** 转成上述
 
 ## 测试
 
+### 离线 HTTP 审核队列 E2E（真实服务进程、合成数据）
+
+```bash
+python3 -m unittest discover -s tests -p 'test_http_review_e2e.py' -v
+# 完整回归（包含此测试与历史测试）：
+python3 -m unittest discover -s tests -v
+```
+
+新增测试会在随机 `127.0.0.1` 端口启动独立 `app.py` 子进程，使用一次性模拟访问令牌及操作系统临时目录内 SQLite；通过真实 HTTP 请求完成候选账单入队、批准、拒绝、重复票据幂等、审核日志和服务重启核对。测试结束清理进程和临时数据库；**不访问 Gmail、银行、AI 厂商接口或任何真实付款账号**，不需要配置任何实际凭证。
+
+这是 HTTP 服务进程级 E2E，**不是浏览器界面 E2E，也不是 Docker/Synology 部署验收**。该测试使用固定合成汇率 `1 USD = 7 CNY`，例如模拟付款 12.50 USD 的已批准账单计为 87.50 CNY；待审核和拒绝的账单都不计现金支出。
+
 ```bash
 python3 -m unittest discover -s tests -v
 node -e "const fs=require('fs'),vm=require('vm');new vm.Script(fs.readFileSync('web/index.html','utf8').match(/<script>([\\s\\S]*?)<\\/script>/)[1]);console.log('JS syntax OK')"
