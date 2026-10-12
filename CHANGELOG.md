@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased] - 2026-10-12
+
+- Fix: `app.connect_db()` now explicitly closes SQLite connections in `finally` while preserving context-manager transaction commit/rollback semantics.
+- Test fixture: deterministic close for two direct SQLite connections in `tests/test_snapshot.py`; standalone DDL creation still commits before verification.
+- Regression, synthetic only: 26/26 Python tests pass with `ResourceWarning` elevated to errors and no recorded SQLite resource warnings; both HTML inline JavaScript syntax checks pass.
+- Does not modify ledger calculations or review behavior, connect external services, or run a production deployment. Browser E2E, Docker and Synology acceptance remain unverified.
+
+
 ## [0.3.3-dev] - 2026-10-10
 
 - 在 `GET /api/invoices` 为待审核候选增加跨来源保守相似付款提示 `possibleDuplicates`（最多五条）。匹配条件：供应商标准化后同名、相同付款日期、类型、原币金额与币种，且 `source` 不同；只有待审核、已批准候选或具有来源标识的真实入账流水可作为依据，不使用已拒绝票据匹配。

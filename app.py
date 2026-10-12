@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import calendar
+from contextlib import contextmanager
 import datetime as dt
 import hmac
 import json
@@ -146,10 +147,15 @@ def normalize_state(data):
     return out
 
 
+@contextmanager
 def connect_db():
     db = sqlite3.connect(str(DB_PATH), timeout=10)
-    db.execute('PRAGMA busy_timeout=10000')
-    return db
+    try:
+        db.execute('PRAGMA busy_timeout=10000')
+        with db:
+            yield db
+    finally:
+        db.close()
 
 
 def init_db():

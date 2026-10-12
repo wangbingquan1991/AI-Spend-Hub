@@ -1,4 +1,5 @@
 """Synthetic-only tests for full backup, WAL, audit history, restore drill and safety."""
+from contextlib import closing
 from pathlib import Path
 import json
 import os
@@ -37,7 +38,7 @@ class SnapshotTests(unittest.TestCase):
         restored = self.folder / 'rehearsal.sqlite3'
         self.assertEqual(copy_new(self.source, backup), verify(self.source))
         self.assertEqual(copy_new(backup, restored), verify(backup))
-        with sqlite3.connect(restored) as db:
+        with closing(sqlite3.connect(restored)) as db:
             self.assertEqual(db.execute('SELECT status FROM invoice_reviews WHERE external_id=?',
                                         ('review-001',)).fetchone()[0], 'rejected')
             self.assertEqual(db.execute('SELECT status FROM invoice_reviews WHERE external_id=?',
@@ -62,8 +63,9 @@ class SnapshotTests(unittest.TestCase):
         with self.assertRaises(sqlite3.DatabaseError):
             verify(corrupt)
         old = self.folder / 'old.sqlite3'
-        with sqlite3.connect(old) as db:
-            db.execute('CREATE TABLE ledger (id INTEGER PRIMARY KEY, revision INTEGER, state_json TEXT)')
+        with closing(sqlite3.connect(old)) as db:
+            with db:
+                db.execute('CREATE TABLE ledger (id INTEGER PRIMARY KEY, revision INTEGER, state_json TEXT)')
         with self.assertRaisesRegex(ValueError, 'missing tables'):
             verify(old)
         with self.assertRaises(FileNotFoundError):
